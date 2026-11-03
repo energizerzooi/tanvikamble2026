@@ -278,7 +278,7 @@ a { color: inherit; }
 .pinned .dish.active img { box-shadow: 0 0 0 4px var(--red); }
 .live-caption { font-family: var(--script); font-weight: 700; color: var(--red); font-size: clamp(40px, 5vw, 72px); line-height: 1.1; height: clamp(88px, 8.6vw, 124px); overflow: hidden; margin: 0; display: none; }
 .pass-foot { display: none; }
-/* Pinned mode (set by script on wide screens) */
+/* Pinned mode (set by script) */
 .pinned .pass-sticky { position: sticky; top: calc(var(--header-h) + env(safe-area-inset-top, 0px)); height: calc(100vh - var(--header-h) - env(safe-area-inset-top, 0px)); height: calc(100svh - var(--header-h) - env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; justify-content: center; overflow: hidden; padding-block: 0; }
 .pinned .pass-track { overflow: visible; scroll-snap-type: none; will-change: transform; }
 .pinned .dish img { height: clamp(260px, calc(100svh - var(--header-h) - 230px), 560px); }
@@ -291,20 +291,17 @@ a { color: inherit; }
 .pass-sticky > .wrap { width: 100%; }
 .pinned .live-caption { flex: 1 1 auto; min-width: 0; }
 .pass-count { flex: none; min-width: 6ch; text-align: right; align-self: flex-start; margin-top: 12px; }
+.pass-folded .pass-track { transition: transform .4s ease; }
 @media (max-width: 760px) {
-  /* Swipeable filmstrip: the same red name, counter, ring and progress line as the pinned desktop gallery */
+  /* The pinned gallery at phone size: one photo height, with the counter beside the progress line */
   .pass { margin-top: 28px; padding-top: 20px; }
   .pass .section-head { margin-bottom: 16px !important; }
-  .pass-sticky { --dish-h: min(88vw, 42svh); padding-block: 0 16px; }
-  .pass-track { gap: 12px; padding: 6px 7vw; scrollbar-width: none; overscroll-behavior-x: contain; }
-  .pass-track::-webkit-scrollbar { display: none; }
-  .dish { position: relative; }
-  .dish img { height: var(--dish-h); max-width: 86vw; }
-  .dish.active img { box-shadow: 0 0 0 3px var(--red); }
-  .dish figcaption { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pass-track { gap: 12px; padding: 6px 7vw; }
+  .dish img, .pinned .dish img { height: min(100vw, calc(100svh - var(--header-h) - 190px)); max-width: 86vw; }
+  .pinned .dish.active img { box-shadow: 0 0 0 3px var(--red); }
   .pass-sticky > .wrap { position: relative; }
-  .pass-foot { display: block; margin-top: 10px; }
-  .live-caption { display: block; font-size: 34px; height: 76px; }
+  .pinned .pass-foot { display: block; margin-top: 12px; }
+  .live-caption { font-size: 34px; height: 76px; }
   .pass-count { position: absolute; right: var(--gutter-r); bottom: -9px; margin: 0; font-size: 14px; }
   .pass-progress { margin: 6px 64px 0 0; }
   .pass-progress i { min-width: 24px; }
@@ -714,8 +711,7 @@ a { color: inherit; }
   const live = document.getElementById('live-caption');
   const count = document.getElementById('pass-count');
   const bar = document.getElementById('pass-bar');
-  const wide = window.matchMedia('(min-width: 761px)');
-  let travel = 0, hovered = null, current = -1;
+  let travel = 0, hovered = null, current = -1, passFolded = false;
 
   function fitCaption() {
     live.style.fontSize = '';
@@ -740,36 +736,31 @@ a { color: inherit; }
   }
 
   function buildPass() {
-    if (wide.matches) {
-      document.body.classList.add('pinned');
-      track.style.transform = '';
-      const stickyH = sticky.clientHeight;
-      travel = Math.max(0, track.scrollWidth - track.clientWidth);
-      outer.style.height = (stickyH + travel) + 'px';
-    } else {
-      document.body.classList.remove('pinned');
-      outer.style.height = '';
-      track.style.transform = '';
-      travel = 0;
-    }
+    if (passFolded) return;
+    document.body.classList.add('pinned');
+    track.style.transform = '';
+    const stickyH = sticky.clientHeight;
+    travel = Math.max(0, track.scrollWidth - track.clientWidth);
+    outer.style.height = (stickyH + travel) + 'px';
     updatePass();
   }
 
   function updatePass() {
-    if (document.body.classList.contains('pinned')) {
-      const r = outer.getBoundingClientRect();
-      const span = outer.offsetHeight - sticky.clientHeight;
-      const headerH = header.offsetHeight;
-      let p = span > 0 ? (headerH - r.top) / span : 0;
-      p = Math.max(0, Math.min(1, p));
-      track.style.transform = `translate3d(${-travel * p}px,0,0)`;
-      bar.style.width = (p * 100) + '%';
-    } else {
-      const max = track.scrollWidth - track.clientWidth;
-      bar.style.width = (max > 0 ? track.scrollLeft / max * 100 : 0) + '%';
-    }
+    if (passFolded) return;
+    const r = outer.getBoundingClientRect();
+    const span = outer.offsetHeight - sticky.clientHeight;
+    const headerH = header.offsetHeight;
+    let p = span > 0 ? (headerH - r.top) / span : 0;
+    p = Math.max(0, Math.min(1, p));
+    track.style.transform = `translate3d(${-travel * p}px,0,0)`;
+    bar.style.width = (p * 100) + '%';
     if (hovered !== null) return;
-    const mid = window.innerWidth / 2;
+    // The focus point travels from the first photo to the last, so both ends of the gallery are reached
+    const first = dishes[0].getBoundingClientRect();
+    const last = dishes[dishes.length - 1].getBoundingClientRect();
+    const focusStart = first.left + first.width / 2 + travel * p;
+    const focusEnd = last.left + last.width / 2 - travel * (1 - p);
+    const mid = focusStart + (focusEnd - focusStart) * p;
     let best = 0, bestD = Infinity;
     dishes.forEach((d, i) => {
       const b = d.getBoundingClientRect();
@@ -779,8 +770,6 @@ a { color: inherit; }
     setCurrent(best);
   }
 
-
-  track.addEventListener('scroll', () => requestAnimationFrame(updatePass), { passive: true });
 
   const snapImgs = [...document.querySelectorAll('.snap img')];
 
@@ -793,11 +782,59 @@ a { color: inherit; }
     }, { threshold: 0.6 }).observe(footer);
   }
 
-  /* Logo and "Back to top" go to the very top of the page */
-  document.querySelectorAll('a[href="#top"]').forEach(a => a.addEventListener('click', e => {
+  /* In-page links: the gallery's sideways scroll is folded away for the trip,
+     so the section passes at its normal height instead of running through every photo */
+  const passStart = () => outer.getBoundingClientRect().top + window.scrollY - header.offsetHeight;
+
+  function foldPass() {
+    const start = passStart();
+    const span = outer.offsetHeight - sticky.clientHeight;
+    const y = window.scrollY;
+    passFolded = true;
+    document.body.classList.add('pass-folded');
+    outer.style.height = sticky.clientHeight + 'px';
+    window.scrollTo({ top: y > start + span ? y - span : Math.min(y, start), behavior: 'instant' });
+  }
+
+  function unfoldPass() {
+    const start = passStart();
+    const y = window.scrollY;
+    passFolded = false;
+    document.body.classList.remove('pass-folded');
+    buildPass();
+    if (y > start) window.scrollTo({ top: y + outer.offsetHeight - sticky.clientHeight, behavior: 'instant' });
+    updatePass();
+  }
+
+  function unfoldWhenStill() {
+    let last = -1, still = 0;
+    (function wait() {
+      still = window.scrollY === last ? still + 1 : 0;
+      last = window.scrollY;
+      if (still < 20) requestAnimationFrame(wait); else unfoldPass();
+    })();
+  }
+
+  function jumpTo(el) {
+    const firstJump = !passFolded;
+    if (firstJump) foldPass();
+    const past = !!el && el.getBoundingClientRect().top + window.scrollY - header.offsetHeight > passStart();
+    track.style.transform = `translate3d(${past ? -travel : 0}px,0,0)`;
+    bar.style.width = past ? '100%' : '0%';
+    setCurrent(past ? dishes.length - 1 : 0);
+    const behavior = reduce ? 'auto' : 'smooth';
+    if (el) el.scrollIntoView({ behavior }); else window.scrollTo({ top: 0, behavior });
+    if (firstJump) unfoldWhenStill();
+  }
+
+  document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
+    const hash = a.getAttribute('href');
+    const el = hash === '#top' ? null : document.querySelector(hash);
+    if (hash !== '#top' && !el) return;
     e.preventDefault();
-    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
-    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    jumpTo(el);
+    if (el) history.pushState(null, '', hash);
+    else if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   }));
 
   /* Scroll loop */
@@ -827,7 +864,6 @@ a { color: inherit; }
 
   function rebuild() { buildRoute(); buildPass(); fitCaption(); }
   window.addEventListener('resize', rebuild);
-  if (wide.addEventListener) wide.addEventListener('change', rebuild);
   window.addEventListener('load', rebuild);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuild);
   dishes.forEach(d => { const im = d.querySelector('img'); if (!im.complete) im.addEventListener('load', buildPass, { once: true }); });
