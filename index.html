@@ -291,6 +291,24 @@ a { color: inherit; }
 .pass-sticky > .wrap { width: 100%; }
 .pinned .live-caption { flex: 1 1 auto; min-width: 0; }
 .pass-count { flex: none; min-width: 6ch; text-align: right; align-self: flex-start; margin-top: 12px; }
+@media (max-width: 760px) {
+  /* Swipeable filmstrip: the same red name, counter, ring and progress line as the pinned desktop gallery */
+  .pass { margin-top: 28px; padding-top: 20px; }
+  .pass .section-head { margin-bottom: 16px !important; }
+  .pass-sticky { --dish-h: min(88vw, 42svh); padding-block: 0 16px; }
+  .pass-track { gap: 12px; padding: 6px 7vw; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .pass-track::-webkit-scrollbar { display: none; }
+  .dish { position: relative; }
+  .dish img { height: var(--dish-h); max-width: 86vw; }
+  .dish.active img { box-shadow: 0 0 0 3px var(--red); }
+  .dish figcaption { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pass-sticky > .wrap { position: relative; }
+  .pass-foot { display: block; margin-top: 10px; }
+  .live-caption { display: block; font-size: 34px; height: 76px; }
+  .pass-count { position: absolute; right: var(--gutter-r); bottom: -9px; margin: 0; font-size: 14px; }
+  .pass-progress { margin: 6px 64px 0 0; }
+  .pass-progress i { min-width: 24px; }
+}
 
 /* Contact */
 .contact { background: var(--red); color: var(--paper); }
@@ -738,14 +756,18 @@ a { color: inherit; }
   }
 
   function updatePass() {
-    if (!document.body.classList.contains('pinned')) return;
-    const r = outer.getBoundingClientRect();
-    const span = outer.offsetHeight - sticky.clientHeight;
-    const headerH = header.offsetHeight;
-    let p = span > 0 ? (headerH - r.top) / span : 0;
-    p = Math.max(0, Math.min(1, p));
-    track.style.transform = `translate3d(${-travel * p}px,0,0)`;
-    bar.style.width = (p * 100) + '%';
+    if (document.body.classList.contains('pinned')) {
+      const r = outer.getBoundingClientRect();
+      const span = outer.offsetHeight - sticky.clientHeight;
+      const headerH = header.offsetHeight;
+      let p = span > 0 ? (headerH - r.top) / span : 0;
+      p = Math.max(0, Math.min(1, p));
+      track.style.transform = `translate3d(${-travel * p}px,0,0)`;
+      bar.style.width = (p * 100) + '%';
+    } else {
+      const max = track.scrollWidth - track.clientWidth;
+      bar.style.width = (max > 0 ? track.scrollLeft / max * 100 : 0) + '%';
+    }
     if (hovered !== null) return;
     const mid = window.innerWidth / 2;
     let best = 0, bestD = Infinity;
@@ -757,6 +779,8 @@ a { color: inherit; }
     setCurrent(best);
   }
 
+
+  track.addEventListener('scroll', () => requestAnimationFrame(updatePass), { passive: true });
 
   const snapImgs = [...document.querySelectorAll('.snap img')];
 
